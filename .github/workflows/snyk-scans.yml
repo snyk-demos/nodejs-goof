@@ -39,6 +39,10 @@ jobs:
       - uses: snyk-demos/snyk-scan-templates/sca@v1
         with:
           snyk-token: ${{ secrets.SNYK_TOKEN }}
+          # Publish to the Snyk platform on default-branch pushes so main is
+          # maintained there (trending, new-vuln notifications, UI ignores).
+          monitor: ${{ github.event_name == 'push' }}
+          target-reference: ${{ github.ref_name }}
 
   code:
     name: Code
@@ -50,6 +54,8 @@ jobs:
       - uses: snyk-demos/snyk-scan-templates/code@v1
         with:
           snyk-token: ${{ secrets.SNYK_TOKEN }}
+          monitor: ${{ github.event_name == 'push' }}
+          target-reference: ${{ github.ref_name }}
 
   iac:
     name: IaC
@@ -64,6 +70,8 @@ jobs:
       - uses: snyk-demos/snyk-scan-templates/iac@v1
         with:
           snyk-token: ${{ secrets.SNYK_TOKEN }}
+          monitor: ${{ github.event_name == 'push' }}
+          target-reference: ${{ github.ref_name }}
 
   # Default branch only. The image is built here and never exists in Git, so
   # the Snyk SCM integration cannot scan it. Delete this job if you ship no image.

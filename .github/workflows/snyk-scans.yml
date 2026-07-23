@@ -81,5 +81,5 @@ jobs:
           image: local/app:${{ github.sha }}
           pr-comment: "false"   # a default-branch push has no PR
           monitor: "true"       # track this image in Snyk over time
-          project-name: app
+          # project-name defaults to <org>/<repo>/<image-without-tag>
           target-reference: ${{ github.ref_name }}

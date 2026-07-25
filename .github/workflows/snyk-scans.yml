@@ -37,6 +37,7 @@ jobs:
           snyk-token: ${{ secrets.SNYK_TOKEN }}
           monitor: ${{ github.event_name == 'push' }}
           target-reference: ${{ github.ref_name }}
+          project-tags: ${{ github.repository }}
           # project-name auto-detects the manifest filename.
   code:
     name: Code
@@ -51,6 +52,7 @@ jobs:
           snyk-token: ${{ secrets.SNYK_TOKEN }}
           monitor: ${{ github.event_name == 'push' }}
           target-reference: ${{ github.ref_name }}
+          project-tags: ${{ github.repository }}
   iac:
     name: IaC
     # Do NOT install dependencies here. Snyk IaC walks the whole tree, dies on
@@ -65,6 +67,7 @@ jobs:
           snyk-token: ${{ secrets.SNYK_TOKEN }}
           monitor: ${{ github.event_name == 'push' }}
           target-reference: ${{ github.ref_name }}
+          project-tags: ${{ github.repository }}
   container:
     name: Container
     if: github.event_name == 'push'
@@ -95,4 +98,5 @@ jobs:
           pr-comment: "false"   # a default-branch push has no PR
           monitor: "true"
           target-reference: ${{ github.ref_name }}
-          # project-name defaults to the image with the tag stripped.
+          project-tags: ${{ github.repository }}
+

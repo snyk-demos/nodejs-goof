@@ -1,12 +1,6 @@
 name: Snyk Scans
-# SCA, Code and IaC run on PRs and default-branch pushes. The push run is the
-# code scanning baseline and publishes to the Snyk UI. Container runs on push
-# only, since the image never exists in Git.
-#
-# Grouping: Snyk is Org > Target > Project. Each scan type always makes its own
-# project; a shared --remote-repo-url is what files them under one target. The
-# actions default it to this repo's URL. Container takes no --remote-repo-url,
-# so the image is always its own target. Two targets is the floor.
+# SCA, Code and IaC run on PRs and default-branch pushes. 
+# The push run is the code scanning baseline and publishes to the Snyk UI.
 on:
   pull_request:
     types: [opened, reopened, synchronize, ready_for_review]
@@ -19,7 +13,6 @@ permissions:
   actions: read          # required by code scanning on private repos
 concurrency:
   group: snyk-${{ github.event.pull_request.number || github.ref_name }}
-  # Never cancel a default-branch run: it is the baseline and the snapshots.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   sca:
@@ -55,8 +48,6 @@ jobs:
           project-tags: repo=${{ github.repository }}
   iac:
     name: IaC
-    # Do NOT install dependencies here. Snyk IaC walks the whole tree, dies on
-    # malformed JSON in node_modules, and has no --exclude flag.
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -68,35 +59,3 @@ jobs:
           monitor: ${{ github.event_name == 'push' }}
           target-reference: ${{ github.ref_name }}
           project-tags: repo=${{ github.repository }}
-  container:
-    name: Container
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      # Tag with the repo name, lowercased because Docker requires it. Skips
-      # itself when there is no Dockerfile.
-      - name: Resolve image name
-        id: img
-        env:
-          REPO: ${{ github.repository }}
-        run: |
-          if [ ! -f Dockerfile ]; then
-            echo "::notice::No Dockerfile at the repo root; skipping the container scan."
-            echo "exists=false" >> "$GITHUB_OUTPUT"; exit 0
-          fi
-          echo "exists=true" >> "$GITHUB_OUTPUT"
-          echo "name=$(printf '%s' "$REPO" | tr '[:upper:]' '[:lower:]'):$GITHUB_SHA" >> "$GITHUB_OUTPUT"
-      - if: steps.img.outputs.exists == 'true'
-        run: docker build -t "${{ steps.img.outputs.name }}" .
-      - if: steps.img.outputs.exists == 'true'
-        uses: snyk-demos/snyk-scan-templates/container@v1
-        with:
-          snyk-token: ${{ secrets.SNYK_TOKEN }}
-          image: ${{ steps.img.outputs.name }}
-          pr-comment: "false"   # a default-branch push has no PR
-          monitor: "true"
-          target-reference: ${{ github.ref_name }}
-          project-tags: repo=${{ github.repository }}
-

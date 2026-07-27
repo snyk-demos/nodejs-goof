@@ -1,61 +1,97 @@
 name: Snyk Scans
-# SCA, Code and IaC run on PRs and default-branch pushes. 
-# The push run is the code scanning baseline and publishes to the Snyk UI.
 on:
   pull_request:
     types: [opened, reopened, synchronize, ready_for_review]
   push:
     branches: [main, master]
+  merge_group:
+  workflow_dispatch:
 permissions:
-  contents: read
-  pull-requests: write
-  security-events: write
-  actions: read          # required by code scanning on private repos
+  contents: read          # actions/checkout
+  pull-requests: write    # sticky PR comment via gh api
+  security-events: write  # upload-sarif
+  actions: read           # required by code scanning on private repos
 concurrency:
   group: snyk-${{ github.event.pull_request.number || github.ref_name }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   sca:
     name: SCA
-    # Fork PRs get no secrets, so the scan cannot run.
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    # Fork PRs get no secrets.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      # install-command defaults to "auto". Override with e.g.
-      # "dotnet restore", "make deps", or "skip".
+      - uses: actions/checkout@v6.0.3
+
       - uses: snyk-demos/snyk-scan-templates/sca@v1
         with:
           snyk-token: ${{ secrets.SNYK_TOKEN }}
+          # Pin the CLI: on "latest" a CLI release changes this gate silently.
+          snyk-cli-version: "1.1306.1"
           monitor: ${{ github.event_name == 'push' }}
           target-reference: ${{ github.ref_name }}
-          project-tags: repo=${{ github.repository }}
+          project-tags: app=${{ github.event.repository.name }}
           # project-name auto-detects the manifest filename.
   code:
     name: Code
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6.0.3
       # --report needs "View Project Ignores" on the token's role, or 403.
       - uses: snyk-demos/snyk-scan-templates/code@v1
         with:
           snyk-token: ${{ secrets.SNYK_TOKEN }}
+          snyk-cli-version: "1.1306.1"
           monitor: ${{ github.event_name == 'push' }}
           target-reference: ${{ github.ref_name }}
-          project-tags: repo=${{ github.repository }}
+          project-tags: app=${{ github.event.repository.name }}
   iac:
     name: IaC
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6.0.3
       - uses: snyk-demos/snyk-scan-templates/iac@v1
         with:
           snyk-token: ${{ secrets.SNYK_TOKEN }}
+          snyk-cli-version: "1.1306.1"
           monitor: ${{ github.event_name == 'push' }}
           target-reference: ${{ github.ref_name }}
-          project-tags: repo=${{ github.repository }}
+          project-tags: app=${{ github.event.repository.name }}
+  container:
+    name: Container
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6.0.3
+      - name: Resolve image name
+        id: img
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          if [ ! -f Dockerfile ]; then
+            echo "::notice::No Dockerfile at the repo root; skipping the container scan."
+            echo "exists=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "exists=true" >> "$GITHUB_OUTPUT"
+          echo "name=$(printf '%s' "$REPO" | tr '[:upper:]' '[:lower:]'):$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+      - if: steps.img.outputs.exists == 'true'
+        run: docker build -t "${{ steps.img.outputs.name }}" .
+      - if: steps.img.outputs.exists == 'true'
+        uses: snyk-demos/snyk-scan-templates/container@v1
+        with:
+          snyk-token: ${{ secrets.SNYK_TOKEN }}
+          snyk-cli-version: "1.1306.1"
+          image: ${{ steps.img.outputs.name }}
+          pr-comment: "false" 
+          monitor: "true"
+          target-reference: ${{ github.ref_name }}
+          project-tags: app=${{ github.event.repository.name }}
+          # container monitor takes no --remote-repo-url or --target-name, so
+          # the project name is the only handle distinguishing images.
+          project-name: ${{ github.event.repository.name }} image

@@ -88,10 +88,11 @@ jobs:
           snyk-token: ${{ secrets.SNYK_TOKEN }}
           snyk-cli-version: "1.1306.1"
           image: ${{ steps.img.outputs.name }}
-          pr-comment: "false" 
-          monitor: "true"
-          target-reference: ${{ github.ref_name }}
+          pr-comment: "true" 
+          monitor: ${{ github.event_name == 'push' }}
+          target-reference: auto
           project-tags: app=${{ github.event.repository.name }}
+          exclude-app-vulns: "false"
           # container monitor takes no --remote-repo-url or --target-name, so
           # the project name is the only handle distinguishing images.
           project-name: ${{ github.event.repository.name }} image

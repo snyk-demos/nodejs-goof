@@ -90,7 +90,7 @@ jobs:
           image: ${{ steps.img.outputs.name }}
           pr-comment: "true" 
           monitor: ${{ github.event_name == 'push' }}
-          target-reference: auto
+          target-reference: ${{ github.ref_name }}
           project-tags: app=${{ github.event.repository.name }}
           exclude-app-vulns: "false"
           # container monitor takes no --remote-repo-url or --target-name, so
